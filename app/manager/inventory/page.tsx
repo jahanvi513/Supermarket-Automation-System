@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import { getInventory, updateInventory } from "@/lib/api"
+import { getInventory, updateInventory, getProducts } from "@/lib/api"
 
 export default function ManagerInventory() {
   const { toast } = useToast()
   const [inventory, setInventory] = useState<any[]>([])
+  const [productsMap, setProductsMap] = useState<Record<string, any>>({})
   const [filteredInventory, setFilteredInventory] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
@@ -23,117 +24,77 @@ export default function ManagerInventory() {
   const [isUpdating, setIsUpdating] = useState(false)
 
   useEffect(() => {
-    fetchInventory()
+    fetchData()
   }, [])
 
   useEffect(() => {
     if (searchTerm.trim() === "") {
       setFilteredInventory(inventory)
     } else {
-      const lowercaseSearch = searchTerm.toLowerCase()
-      const filtered = inventory.filter(
-        (item) =>
-          (item.productId?.toString() || "").includes(lowercaseSearch) ||
-          (item.productName?.toLowerCase() || "").includes(lowercaseSearch) ||
-          (item.category?.toLowerCase() || "").includes(lowercaseSearch),
-      )
+      const lower = searchTerm.toLowerCase()
+      const filtered = inventory.filter((item) => {
+        const product = productsMap[item.productId] || {}
+        return (
+          item.productId?.toString().includes(lower) ||
+          product.name?.toLowerCase().includes(lower) ||
+          product.category?.toLowerCase().includes(lower)
+        )
+      })
       setFilteredInventory(filtered)
     }
-  }, [searchTerm, inventory])
+  }, [searchTerm, inventory, productsMap])
 
-  const fetchInventory = async () => {
+  const fetchData = async () => {
     setIsLoading(true)
     try {
-      const data = await getInventory()
-      if (Array.isArray(data)) {
-        setInventory(data)
-        setFilteredInventory(data)
-      } else {
-        console.error("Invalid inventory data format:", data)
-        toast({
-          title: "Error",
-          description: "Failed to fetch inventory. Invalid data format.",
-          variant: "destructive",
-        })
-        setInventory([])
-        setFilteredInventory([])
-      }
-    } catch (error) {
-      console.error("Error fetching inventory:", error)
+      const [inventoryData, productList] = await Promise.all([
+        getInventory(),
+        getProducts(),
+      ])
+      const productIndex = Object.fromEntries(productList.map((p: any) => [p.id, p]))
+      setProductsMap(productIndex)
+      setInventory(inventoryData)
+      setFilteredInventory(inventoryData)
+    } catch (err) {
       toast({
         title: "Error",
-        description: "Failed to fetch inventory. Please try again.",
+        description: "Failed to fetch inventory or product data.",
         variant: "destructive",
       })
-      setInventory([])
-      setFilteredInventory([])
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleUpdateClick = (item: any) => {
+    setSelectedItem(item)
+    setNewQuantity(item.currentQuantity?.toString() || "0")
+    setIsDialogOpen(true)
+  }
+
   const handleUpdateInventory = async () => {
     if (!selectedItem || !newQuantity.trim() || isNaN(Number(newQuantity))) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid quantity.",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Invalid quantity", variant: "destructive" })
       return
     }
 
     setIsUpdating(true)
     try {
       await updateInventory(selectedItem.productId, Number(newQuantity))
-
-      // Update local state
-      const updatedInventory = inventory.map((item) => {
-        if (item.productId === selectedItem.productId) {
-          return { ...item, currentQuantity: Number(newQuantity) }
-        }
-        return item
-      })
-
-      setInventory(updatedInventory)
-      setFilteredInventory(updatedInventory)
-
-      toast({
-        title: "Success",
-        description: "Inventory updated successfully.",
-      })
-
+      const updated = inventory.map((i) =>
+        i.productId === selectedItem.productId
+          ? { ...i, currentQuantity: Number(newQuantity) }
+          : i
+      )
+      setInventory(updated)
+      setFilteredInventory(updated)
+      toast({ title: "Success", description: "Inventory updated successfully." })
       setIsDialogOpen(false)
-    } catch (error) {
-      console.error("Error updating inventory:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update inventory. Please try again.",
-        variant: "destructive",
-      })
+    } catch (err) {
+      toast({ title: "Error", description: "Update failed. Try again.", variant: "destructive" })
     } finally {
       setIsUpdating(false)
     }
-  }
-
-  const handleUpdateClick = (item: any) => {
-    if (!item) {
-      console.error("Attempted to update undefined item")
-      toast({
-        title: "Error",
-        description: "Invalid item selected.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSelectedItem(item)
-
-    // Safely convert currentQuantity to string with fallback to "0"
-    const quantityStr =
-      item.currentQuantity !== undefined && item.currentQuantity !== null ? item.currentQuantity.toString() : "0"
-
-    setNewQuantity(quantityStr)
-    setIsDialogOpen(true)
   }
 
   return (
@@ -149,7 +110,7 @@ export default function ManagerInventory() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-md"
           />
-          <Button onClick={fetchInventory}>Refresh</Button>
+          <Button onClick={fetchData}>Refresh</Button>
         </div>
 
         {isLoading ? (
@@ -168,39 +129,36 @@ export default function ManagerInventory() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredInventory.map((item) => (
-                <TableRow key={item.productId || `item-${Math.random()}`}>
-                  <TableCell>{item.productId || "N/A"}</TableCell>
-                  <TableCell className="font-medium">{item.productName || "N/A"}</TableCell>
-                  <TableCell>{item.category || "N/A"}</TableCell>
-                  <TableCell>{item.currentQuantity !== undefined ? item.currentQuantity : "N/A"}</TableCell>
-                  <TableCell>{item.minimumThreshold !== undefined ? item.minimumThreshold : "N/A"}</TableCell>
-                  <TableCell>
-                    {item.currentQuantity !== undefined && item.minimumThreshold !== undefined ? (
-                      item.currentQuantity <= item.minimumThreshold ? (
-                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                          Low Stock
-                        </Badge>
+              {filteredInventory.map((item) => {
+                const product = productsMap[item.productId] || {}
+                return (
+                  <TableRow key={item.productId}>
+                    <TableCell>{item.productId}</TableCell>
+                    <TableCell>{product.name || "N/A"}</TableCell>
+                    <TableCell>{product.category || "N/A"}</TableCell>
+                    <TableCell>{item.currentQuantity ?? "N/A"}</TableCell>
+                    <TableCell>{item.minimumThreshold ?? "N/A"}</TableCell>
+                    <TableCell>
+                      {item.currentQuantity != null && item.minimumThreshold != null ? (
+                        item.currentQuantity <= item.minimumThreshold ? (
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Low Stock</Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">In Stock</Badge>
+                        )
                       ) : (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          In Stock
-                        </Badge>
-                      )
-                    ) : (
-                      <Badge variant="outline">Unknown</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => handleUpdateClick(item)}>
-                      Update
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                        <Badge variant="outline">Unknown</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" onClick={() => handleUpdateClick(item)}>Update</Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         ) : (
-          <div className="text-center py-8 text-gray-500">No inventory items found matching your search.</div>
+          <div className="text-center py-8 text-gray-500">No inventory items found.</div>
         )}
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -210,21 +168,15 @@ export default function ManagerInventory() {
             </DialogHeader>
             {selectedItem && (
               <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <div className="font-medium">{selectedItem.productName || "Unknown Product"}</div>
-                  <div className="text-sm text-gray-500">Product ID: {selectedItem.productId || "N/A"}</div>
+                <div>
+                  <div className="font-medium">{productsMap[selectedItem.productId]?.name || "Unknown Product"}</div>
+                  <div className="text-sm text-gray-500">Product ID: {selectedItem.productId}</div>
                 </div>
-
-                <div className="space-y-2">
+                <div>
                   <Label htmlFor="current-quantity">Current Quantity</Label>
-                  <Input
-                    id="current-quantity"
-                    value={selectedItem.currentQuantity !== undefined ? selectedItem.currentQuantity : "N/A"}
-                    disabled
-                  />
+                  <Input id="current-quantity" value={selectedItem.currentQuantity ?? "N/A"} disabled />
                 </div>
-
-                <div className="space-y-2">
+                <div>
                   <Label htmlFor="new-quantity">New Quantity</Label>
                   <Input
                     id="new-quantity"
@@ -237,9 +189,7 @@ export default function ManagerInventory() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleUpdateInventory} disabled={isUpdating}>
                 {isUpdating ? "Updating..." : "Update"}
               </Button>
