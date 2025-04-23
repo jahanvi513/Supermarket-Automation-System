@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/use-toast"
-import { getCustomers, getCustomerById } from "@/lib/api"
+import { getCustomers, getCustomerById, updateCustomerCredits } from "@/lib/api"
+import { Label } from "@/components/ui/label"
+
 
 export default function EmployeeCustomers() {
   const [customers, setCustomers] = useState<any[]>([])
@@ -16,6 +18,7 @@ export default function EmployeeCustomers() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [newCredit, setNewCredit] = useState<string>("")
 
   useEffect(() => {
     fetchCustomers()
@@ -142,6 +145,43 @@ export default function EmployeeCustomers() {
 
                   <div className="text-sm font-medium">Credit Balance:</div>
                   <div>${selectedCustomer.creditBalance.toFixed(2)}</div>
+                  <div className="col-span-2 pt-2">
+                    <Label htmlFor="update-credit" className="text-sm font-medium">Update Credit Balance</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        id="update-credit"
+                        type="number"
+                        placeholder="Enter new credit value"
+                        value={newCredit}
+                        onChange={(e) => setNewCredit(e.target.value)}
+                        className="max-w-[160px]"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          const newCreditValue = parseFloat(newCredit)
+                          if (isNaN(newCreditValue) || newCreditValue < 0) {
+                            toast({ title: "Invalid Value", description: "Please enter a valid credit amount", variant: "destructive" })
+                            return
+                          }
+
+                          try {
+                            await updateCustomerCredits(selectedCustomer.id, newCreditValue)
+                            toast({ title: "Success", description: "Credit balance updated." })
+                            setIsDialogOpen(false)
+                            setNewCredit("")
+                            fetchCustomers()
+                          } catch (err) {
+                            toast({ title: "Error", description: "Failed to update credit.", variant: "destructive" })
+                          }
+                        }}
+                      >
+                        Update
+                      </Button>
+                    </div>
+                  </div>
+
+                  
                 </div>
 
                 <div className="border-t pt-4">
