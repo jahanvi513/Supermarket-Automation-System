@@ -1,148 +1,120 @@
 "use client"
+import { useState } from "react"
+import { Input } from "@/components/ui/input"
+import ManagerLayout from "@/components/layouts/manager-layout"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { toast } from "@/components/ui/use-toast"
-import { getStoreLayout } from "@/lib/api"
+const mockData = {
+  Dairy: ["Milk", "Cheese", "Yogurt"],
+  Meat: ["Chicken", "Beef", "Pork"],
+  Bakery: ["Bread", "Bagel", "Croissant"],
+  Produce: ["Apple", "Banana", "Carrot"]
+}
 
-export default function EmployeeStoreLayout() {
-  const [storeLayout, setStoreLayout] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedSection, setSelectedSection] = useState<string | null>(null)
+export default function StoreLayout() {
+  const [search, setSearch] = useState("")
 
-  useEffect(() => {
-    fetchStoreLayout()
-  }, [])
+  const getSearchMatches = () => {
+    const results: { product: string; category: string }[] = []
+    if (search.trim() === "") return results
 
-  const fetchStoreLayout = async () => {
-    setIsLoading(true)
-    try {
-      const data = await getStoreLayout()
-      setStoreLayout(data)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch store layout. Please try again.",
-        variant: "destructive",
+    for (const [category, items] of Object.entries(mockData)) {
+      items.forEach((item) => {
+        if (item.toLowerCase().includes(search.toLowerCase())) {
+          results.push({ product: item, category })
+        }
       })
-    } finally {
-      setIsLoading(false)
     }
+    return results
   }
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Store Layout</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">Loading store layout...</div>
-        </CardContent>
-      </Card>
-    )
-  }
+  const searchMatches = getSearchMatches()
 
-  if (!storeLayout) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Store Layout</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-gray-500">Store layout information is not available.</div>
-        </CardContent>
-      </Card>
+  const filterProducts = (category: string) =>
+    mockData[category].filter((item) =>
+      item.toLowerCase().includes(search.toLowerCase())
     )
-  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Store Layout</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
-            <div className="border rounded-md p-4 bg-gray-50 h-[500px] relative">
-              {/* Store layout visualization */}
-              <div className="grid grid-cols-4 grid-rows-4 gap-2 h-full">
-                {storeLayout.sections.map((section: any) => (
-                  <div
-                    key={section.id}
-                    className={`border rounded-md flex items-center justify-center p-2 cursor-pointer transition-colors ${
-                      selectedSection === section.id ? "bg-blue-100 border-blue-300" : "bg-white hover:bg-gray-100"
-                    }`}
-                    style={{
-                      gridColumn: `span ${section.dimensions.width}`,
-                      gridRow: `span ${section.dimensions.height}`,
-                    }}
-                    onClick={() => setSelectedSection(section.id)}
-                  >
-                    <div className="text-center">
-                      <div className="font-medium">{section.name}</div>
-                      <div className="text-xs text-gray-500">{section.type}</div>
-                    </div>
-                  </div>
+    <ManagerLayout>
+      <div className="container py-6">
+        <h1 className="text-2xl font-bold mb-4">Store Layout Map</h1>
+
+        <Input
+          type="text"
+          placeholder="Search for a product..."
+          className="mb-2"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        {searchMatches.length > 0 && (
+          <div className="text-sm text-gray-700 mb-6">
+            {searchMatches.map((match, index) => (
+              <p key={index}>
+                <strong>{match.product}</strong> is in <strong>{match.category}</strong>
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* 📍 Grid-style Store Layout */}
+        <div className="grid grid-cols-4 gap-4 h-[500px] text-sm font-medium text-center mb-10">
+          {/* Left Aisle */}
+          <div className="col-span-1 row-span-4 bg-gray-100 border flex items-center justify-center p-4">
+            <div>
+              <h2 className="mb-2">Dairy</h2>
+              <ul className="text-xs text-left">
+                {filterProducts("Dairy").map((item, i) => (
+                  <li key={i}>• {item}</li>
                 ))}
-              </div>
+              </ul>
             </div>
           </div>
 
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Section Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {selectedSection ? (
-                  (() => {
-                    const section = storeLayout.sections.find((s: any) => s.id === selectedSection)
-                    return (
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="font-medium">{section.name}</h3>
-                          <p className="text-sm text-gray-500">{section.type}</p>
-                        </div>
-
-                        <div>
-                          <h4 className="text-sm font-medium mb-1">Products in this section:</h4>
-                          {section.products && section.products.length > 0 ? (
-                            <ul className="space-y-1">
-                              {section.products.map((product: any) => (
-                                <li key={product.id} className="text-sm">
-                                  {product.name} - Aisle {product.aisle}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-sm text-gray-500">No products in this section.</p>
-                          )}
-                        </div>
-
-                        <div className="pt-2">
-                          <Button variant="outline" size="sm" className="w-full">
-                            View All Products
-                          </Button>
-                        </div>
-                      </div>
-                    )
-                  })()
-                ) : (
-                  <div className="text-center py-4 text-gray-500">Select a section to view details</div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="mt-4">
-              <Button variant="outline" className="w-full" onClick={fetchStoreLayout}>
-                Refresh Layout
-              </Button>
+          {/* Top Middle */}
+          <div className="col-span-2 bg-red-100 border flex items-center justify-center p-4">
+            <div>
+              <h2 className="mb-2">Bakery</h2>
+              <ul className="text-xs text-left">
+                {filterProducts("Bakery").map((item, i) => (
+                  <li key={i}>• {item}</li>
+                ))}
+              </ul>
             </div>
+          </div>
+
+          {/* Center block: Meat + Produce stacked */}
+          <div className="col-span-2 row-span-2 border border-dashed flex flex-col justify-evenly items-center bg-white">
+            <div>
+              <h2 className="text-blue-800">Meat</h2>
+              <ul className="text-xs text-left">
+                {filterProducts("Meat").map((item, i) => (
+                  <li key={i}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-green-800">Produce</h2>
+              <ul className="text-xs text-left">
+                {filterProducts("Produce").map((item, i) => (
+                  <li key={i}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Checkout Area */}
+          <div className="col-span-2 bg-green-100 border flex items-center justify-center">
+            <h2 className="text-xl">Checkout</h2>
+          </div>
+
+          {/* Right Wall */}
+          <div className="col-span-1 row-span-4 bg-gray-100 border flex items-center justify-center">
+            <h2>Other Sections</h2>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </ManagerLayout>
   )
 }
+
