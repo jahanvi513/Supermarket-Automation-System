@@ -7,15 +7,30 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
 import { getProducts } from "@/lib/api"
+import { getStoreLayout } from "@/lib/api"
 
 export default function EmployeeProducts() {
   const [products, setProducts] = useState<any[]>([])
   const [filteredProducts, setFilteredProducts] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [storeLayout, setStoreLayout] = useState<any>(null)
 
   useEffect(() => {
     fetchProducts()
+  }, [])
+
+  useEffect(() => {
+    const fetchLayout = async () => {
+      try {
+        const layout = await getStoreLayout()
+        setStoreLayout(layout)
+      } catch (err) {
+        console.error("Error fetching store layout", err)
+      }
+    }
+  
+    fetchLayout()
   }, [])
 
   useEffect(() => {
@@ -50,6 +65,18 @@ export default function EmployeeProducts() {
     }
   }
 
+  const getAisleInfo = (productId: string) => {
+    if (!storeLayout) return "N/A"
+  
+    for (const section of storeLayout.sections) {
+      const match = section.products?.find((p: any) => p.id === productId)
+      if (match) {
+        return `Aisle ${match.aisle} (${section.name})`
+      }
+    }
+    return "N/A"
+  }
+  
   return (
     <Card>
       <CardHeader>
@@ -77,6 +104,7 @@ export default function EmployeeProducts() {
                 <TableHead>Price</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Location</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -86,8 +114,8 @@ export default function EmployeeProducts() {
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>{product.category}</TableCell>
                   <TableCell>${product.price.toFixed(2)}</TableCell>
-                  <TableCell>{product.stockQuantity}</TableCell>
-                  <TableCell>
+                 <TableCell>{product.stockQuantity ?? "N/A"}</TableCell>
+                <TableCell>
                     {product.stockQuantity > 0 ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                         In Stock
@@ -98,6 +126,25 @@ export default function EmployeeProducts() {
                       </Badge>
                     )}
                   </TableCell>
+                  <TableCell>
+                  {/* Dummy location based on product ID or name */}
+                  {(() => {
+                    switch (product.name.toLowerCase()) {
+                      case "milk":
+                        return "Aisle 1 - Dairy Section"
+                      case "bread":
+                        return "Aisle 2 - Bakery"
+                      case "eggs":
+                        return "Aisle 3 - Produce"
+                      case "apples":
+                        return "Aisle 3 - Produce"
+                      case "chicken":
+                        return "Aisle 4 - Meat"
+                      default:
+                        return "N/A"
+                    }
+                  })()}
+                </TableCell>
                 </TableRow>
               ))}
             </TableBody>
