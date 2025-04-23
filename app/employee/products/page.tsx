@@ -1,158 +1,168 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { toast } from "@/components/ui/use-toast"
-import { getProducts } from "@/lib/api"
-import { getStoreLayout } from "@/lib/api"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/components/ui/use-toast"
+import { getProducts, createProduct, updateProduct, deleteProduct } from "@/lib/api"
 
-export default function EmployeeProducts() {
+export default function ManagerProducts() {
+  const { toast } = useToast()
   const [products, setProducts] = useState<any[]>([])
-  const [filteredProducts, setFilteredProducts] = useState<any[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
-  const [storeLayout, setStoreLayout] = useState<any>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [formData, setFormData] = useState<any>({
+    id: "",
+    name: "",
+    category: "",
+    price: "",
+    unitAvailable: "",
+    location: "",
+    floatDiscount: "",
+    minThreshold: "",
+    maxCapacity: "",
+  })
+
+  const fetchData = async () => {
+    const data = await getProducts()
+    setProducts(data)
+  }
 
   useEffect(() => {
-    fetchProducts()
+    fetchData()
   }, [])
 
-  useEffect(() => {
-    const fetchLayout = async () => {
-      try {
-        const layout = await getStoreLayout()
-        setStoreLayout(layout)
-      } catch (err) {
-        console.error("Error fetching store layout", err)
-      }
-    }
-  
-    fetchLayout()
-  }, [])
+  const handleChange = (e: any) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
 
-  useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredProducts(products)
-    } else {
-      const lowercaseSearch = searchTerm.toLowerCase()
-      const filtered = products.filter(
-        (product) =>
-          product.id.toString().includes(lowercaseSearch) ||
-          product.name.toLowerCase().includes(lowercaseSearch) ||
-          product.category.toLowerCase().includes(lowercaseSearch),
-      )
-      setFilteredProducts(filtered)
-    }
-  }, [searchTerm, products])
+  const handleEdit = (product: any) => {
+    setIsEditMode(true)
+    setFormData(product)
+    setIsDialogOpen(true)
+  }
 
-  const fetchProducts = async () => {
-    setIsLoading(true)
+  const handleDelete = async (id: string) => {
     try {
-      const data = await getProducts()
-      setProducts(data)
-      setFilteredProducts(data)
+      await deleteProduct(id)
+      setProducts((prev) => prev.filter((p) => p.id !== id))  // instant UI update
+      toast({ title: "✅ Product deleted successfully" })
     } catch (error) {
+      console.error("❌ Error deleting product:", error)
       toast({
-        title: "Error",
-        description: "Failed to fetch products. Please try again.",
+        title: "Error deleting product",
+        description: String(error),
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 
-  const getAisleInfo = (productId: string) => {
-    if (!storeLayout) return "N/A"
-  
-    for (const section of storeLayout.sections) {
-      const match = section.products?.find((p: any) => p.id === productId)
-      if (match) {
-        return `Aisle ${match.aisle} (${section.name})`
+  const handleSubmit = async () => {
+    try {
+      if (isEditMode) {
+        await updateProduct(formData.id, formData)
+        toast({ title: "✅ Product updated" })
+      } else {
+        await createProduct(formData)
+        toast({ title: "✅ Product created" })
       }
+      fetchData()
+      setIsDialogOpen(false)
+    } catch (error) {
+      console.error("❌ Error submitting product:", error)
+      toast({
+        title: "Error submitting product",
+        description: String(error),
+        variant: "destructive",
+      })
     }
-    return "N/A"
   }
-  
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Products</CardTitle>
+      <CardHeader className="flex justify-between items-center">
+        <CardTitle>Product Management</CardTitle>
+        <Button
+          onClick={() => {
+            setIsEditMode(false)
+            setFormData({
+              id: "",
+              name: "",
+              category: "",
+              price: "",
+              unitAvailable: "",
+              location: "",
+              floatDiscount: "",
+              minThreshold: "",
+              maxCapacity: "",
+            })
+            setIsDialogOpen(true)
+          }}
+        >
+          Add Product
+        </Button>
       </CardHeader>
       <CardContent>
-        <div className="mb-6">
-          <Input
-            placeholder="Search by ID, name, or category..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
-
-        {isLoading ? (
-          <div className="text-center py-8">Loading products...</div>
-        ) : filteredProducts.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Location</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProducts.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>{product.id}</TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>{product.category}</TableCell>
-                  <TableCell>${product.price.toFixed(2)}</TableCell>
-                 <TableCell>{product.stockQuantity ?? "N/A"}</TableCell>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Price</TableHead>
+              <TableHead>Stock</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((product) => (
+              <TableRow key={product.id}>
+                <TableCell>{product.id}</TableCell>
+                <TableCell>{product.name}</TableCell>
+                <TableCell>{product.category}</TableCell>
+                <TableCell>${product.price}</TableCell>
+                <TableCell>{product.unitAvailable}</TableCell>
+                <TableCell>{product.location}</TableCell>
                 <TableCell>
-                    {product.stockQuantity > 0 ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        In Stock
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                        Out of Stock
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                  {/* Dummy location based on product ID or name */}
-                  {(() => {
-                    switch (product.name.toLowerCase()) {
-                      case "milk":
-                        return "Aisle 1 - Dairy Section"
-                      case "bread":
-                        return "Aisle 2 - Bakery"
-                      case "eggs":
-                        return "Aisle 3 - Produce"
-                      case "apples":
-                        return "Aisle 3 - Produce"
-                      case "chicken":
-                        return "Aisle 4 - Meat"
-                      default:
-                        return "N/A"
-                    }
-                  })()}
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>
+                      Edit
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handleDelete(product.id)}>
+                      Delete
+                    </Button>
+                  </div>
                 </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="text-center py-8 text-gray-500">No products found matching your search.</div>
-        )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{isEditMode ? "Edit Product" : "Add Product"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {["name", "category", "price", "unitAvailable", "location", "floatDiscount", "minThreshold", "maxCapacity"].map((field) => (
+              <div key={field}>
+                <Label htmlFor={field}>{field}</Label>
+                <Input id={field} name={field} value={formData[field]} onChange={handleChange} />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={handleSubmit}>{isEditMode ? "Update" : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
+
